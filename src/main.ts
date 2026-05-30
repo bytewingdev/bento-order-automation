@@ -1,4 +1,5 @@
 import { env } from "./config/env.js";
+import { loginToObento } from "./services/orderService.js";
 import { decideExecution } from "./utils/date.js";
 import { logError, logInfo } from "./utils/logger.js";
 
@@ -34,7 +35,27 @@ async function main() {
     });
   }
 
-  // Phase 5以降でPlaywrightログイン処理を追加する
+    const loginResult = await loginToObento();
+
+    if (!loginResult.success) {
+    logError("Login failed", {
+        status: "FAILED_LOGIN",
+        reason: loginResult.reason,
+        screenshotPath: loginResult.screenshotPath,
+        currentUrl: loginResult.currentUrl,
+        title: loginResult.title,
+    });
+
+    process.exit(1);
+    }
+
+    logInfo("Login succeeded", {
+    status: "LOGIN_SUCCEEDED",
+    currentUrl: loginResult.currentUrl,
+    title: loginResult.title,
+    });
+
+  // Phase 6以降で注文フローを追加する
 }
 
 main().catch((error) => {
