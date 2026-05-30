@@ -1,13 +1,18 @@
+import { env } from "./config/env.js";
 import { decideExecution } from "./utils/date.js";
 import { logError, logInfo } from "./utils/logger.js";
 
 async function main() {
-  logInfo("自動注文処理開始");
+  logInfo("Obento auto order started", {
+    nodeEnv: env.NODE_ENV,
+    orderExecute: env.ORDER_EXECUTE,
+    targetSiteUrl: env.TARGET_SITE_URL,
+  });
 
   const decision = decideExecution();
 
   if (!decision.shouldRun) {
-    logInfo("注文がスキップされました", {
+    logInfo("Order skipped", {
       status: `SKIPPED_${decision.reason}`,
       targetDate: decision.targetDateText,
       reason: decision.reason,
@@ -16,12 +21,20 @@ async function main() {
     return;
   }
 
-  logInfo("注文が許可されました", {
+  logInfo("Order execution allowed", {
     status: "READY_TO_ORDER",
     targetDate: decision.targetDateText,
+    orderExecute: env.ORDER_EXECUTE,
   });
 
-  // Phase 4以降で注文処理を追加する
+  if (!env.ORDER_EXECUTE) {
+    logInfo("Dry run mode enabled", {
+      status: "DRY_RUN",
+      message: "Order confirmation will be skipped in later phases",
+    });
+  }
+
+  // Phase 5以降でPlaywrightログイン処理を追加する
 }
 
 main().catch((error) => {
