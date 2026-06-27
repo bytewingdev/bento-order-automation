@@ -69,7 +69,7 @@ export async function orderObento(targetDateText: string): Promise<OrderResult> 
 }
 
 async function loginToObento(page: Page): Promise<LoginResult> {
-  logInfo("Opening target site", {
+  logInfo("対象サイトを開きます", {
     targetSiteUrl: env.TARGET_SITE_URL,
   });
 
@@ -78,7 +78,7 @@ async function loginToObento(page: Page): Promise<LoginResult> {
     timeout: 30000,
   });
 
-  logInfo("Filling login form");
+  logInfo("ログインフォームに入力します");
 
   await page.locator("#CORPORATION_CD").fill(env.OBENTO_COMPANY_CODE);
   await page.locator('input[name="LOGINID"]').fill(env.OBENTO_USER_ID);
@@ -89,7 +89,7 @@ async function loginToObento(page: Page): Promise<LoginResult> {
     fullPage: true,
   });
 
-  logInfo("Clicking login button");
+  logInfo("ログインボタンをクリックします");
 
   await page.getByRole("button", { name: "ログイン" }).click();
 
@@ -103,7 +103,7 @@ async function loginToObento(page: Page): Promise<LoginResult> {
     fullPage: true,
   });
 
-  logInfo("After login page state", {
+  logInfo("ログイン後の画面状態を確認しました", {
     currentUrl,
     title,
   });
@@ -123,7 +123,7 @@ async function loginToObento(page: Page): Promise<LoginResult> {
 
     return {
       success: false,
-      reason: "LOGIN_FAILED",
+      reason: "ログインに失敗しました",
       screenshotPath,
       currentUrl,
       title,
@@ -145,14 +145,14 @@ async function loginToObento(page: Page): Promise<LoginResult> {
 
     return {
       success: false,
-      reason: "STILL_ON_LOGIN_PAGE",
+      reason: "ログイン後もログイン画面に残っています",
       screenshotPath,
       currentUrl,
       title,
     };
   }
 
-  logInfo("Login flow completed", {
+  logInfo("ログイン処理が完了しました", {
     currentUrl,
     title,
   });
@@ -168,7 +168,7 @@ async function proceedOrderFlow(
   page: Page,
   targetDateText: string
 ): Promise<OrderResult> {
-  logInfo("Starting order flow", {
+  logInfo("注文フローを開始します", {
     targetDate: targetDateText,
   });
 
@@ -180,10 +180,31 @@ async function proceedOrderFlow(
     fullPage: true,
   });
 
-  const alreadyOrdered = await page
-    .getByText(/注文済み|予約済み|注文内容|買い物かごに入っています/)
+  const reorderLinkVisible = await page
+    .getByRole("link", { name: "もう一度注文する" })
+    .first()
     .isVisible()
     .catch(() => false);
+
+  const reorderButtonVisible = await page
+    .getByRole("button", { name: "もう一度注文する" })
+    .first()
+    .isVisible()
+    .catch(() => false);
+
+  const tomorrowMenuText = await page.locator("body").innerText();
+
+  const alreadyOrdered =
+    reorderLinkVisible ||
+    reorderButtonVisible ||
+    isAlreadyOrderedText(tomorrowMenuText);
+
+  logInfo("明日のお弁当画面を確認しました", {
+    targetDate: targetDateText,
+    alreadyOrdered,
+    reorderLinkVisible,
+    reorderButtonVisible,
+  });
 
   if (alreadyOrdered) {
     const screenshotPath = `screenshots/already-ordered-${Date.now()}.png`;
@@ -191,6 +212,12 @@ async function proceedOrderFlow(
     await page.screenshot({
       path: screenshotPath,
       fullPage: true,
+    });
+
+    logInfo("既に注文済みのため、追加注文せず処理を終了します", {
+      status: "ALREADY_ORDERED",
+      targetDate: targetDateText,
+      screenshotPath,
     });
 
     return {
@@ -201,7 +228,7 @@ async function proceedOrderFlow(
     };
   }
 
-  logInfo("Adding item to cart");
+  logInfo("商品を買い物かごに入れます");
 
   await page.getByRole("link", { name: "買い物かごに入れる" }).nth(3).click();
   await page.waitForLoadState("networkidle");
@@ -211,7 +238,7 @@ async function proceedOrderFlow(
     fullPage: true,
   });
 
-  logInfo("Moving to confirmation page");
+  logInfo("注文確認画面へ進みます");
 
   await page.getByRole("button", { name: "入力内容を確認する" }).click();
   await page.waitForLoadState("networkidle");
@@ -226,6 +253,13 @@ async function proceedOrderFlow(
   const actualDateText = bodyText;
   const menuName = bodyText.includes("弁当") ? "弁当" : "";
   const quantity = bodyText.includes("1") ? 1 : 0;
+
+  const isConfirmationPage = /ご注文情報確認|注文確定していません/.test(bodyText);
+
+  logInfo("注文確認画面を確認しました", {
+    targetDate: targetDateText,
+    isConfirmationPage,
+  });
 
   const priceMatch = bodyText.match(/[\d,]+円/);
   const price = priceMatch ? parsePrice(priceMatch[0]) : 0;
@@ -256,7 +290,7 @@ async function proceedOrderFlow(
   }
 
   if (!env.ORDER_EXECUTE) {
-    logInfo("Dry run completed before order confirmation", {
+    logInfo("ドライランのため、注文確定前で処理を終了します", {
       status: "DRY_RUN_COMPLETED",
       targetDate: targetDateText,
       price,
@@ -273,7 +307,7 @@ async function proceedOrderFlow(
     };
   }
 
-  logInfo("Confirming order", {
+  logInfo("注文を確定します", {
     targetDate: targetDateText,
     price,
     menuName,
@@ -297,4 +331,10 @@ async function proceedOrderFlow(
     price,
     screenshotPath,
   };
+}
+
+function isAlreadyOrderedText(text: string): boolean {
+  return /注文済み|予約済み|ご注文済み|注文履歴|買い物かごに入っています|すでに買い物かご|もう一度注文する/.test(
+    text
+  );
 }
