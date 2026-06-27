@@ -1,10 +1,10 @@
 import { env } from "./config/env.js";
-import { loginToObento } from "./services/orderService.js";
+import { orderObento } from "./services/orderService.js";
 import { decideExecution } from "./utils/date.js";
 import { logError, logInfo } from "./utils/logger.js";
 
 async function main() {
-  logInfo("Obento auto order started", {
+  logInfo("弁当注文自動化を開始しました", {
     nodeEnv: env.NODE_ENV,
     orderExecute: env.ORDER_EXECUTE,
     targetSiteUrl: env.TARGET_SITE_URL,
@@ -13,7 +13,7 @@ async function main() {
   const decision = decideExecution();
 
   if (!decision.shouldRun) {
-    logInfo("Order skipped", {
+    logInfo("注文処理をスキップしました", {
       status: `SKIPPED_${decision.reason}`,
       targetDate: decision.targetDateText,
       reason: decision.reason,
@@ -22,44 +22,36 @@ async function main() {
     return;
   }
 
-  logInfo("Order execution allowed", {
+  logInfo("注文処理の実行対象日です", {
     status: "READY_TO_ORDER",
     targetDate: decision.targetDateText,
     orderExecute: env.ORDER_EXECUTE,
   });
 
-  if (!env.ORDER_EXECUTE) {
-    logInfo("Dry run mode enabled", {
-      status: "DRY_RUN",
-      message: "Order confirmation will be skipped in later phases",
-    });
-  }
+  const orderResult = await orderObento(decision.targetDateText);
 
-    const loginResult = await loginToObento();
-
-    if (!loginResult.success) {
-    logError("Login failed", {
-        status: "FAILED_LOGIN",
-        reason: loginResult.reason,
-        screenshotPath: loginResult.screenshotPath,
-        currentUrl: loginResult.currentUrl,
-        title: loginResult.title,
+  if (!orderResult.success) {
+    logError("注文処理に失敗しました", {
+      status: orderResult.status,
+      reason: orderResult.reason,
+      targetDate: orderResult.targetDate,
+      screenshotPath: orderResult.screenshotPath,
     });
 
     process.exit(1);
-    }
+  }
 
-    logInfo("Login succeeded", {
-    status: "LOGIN_SUCCEEDED",
-    currentUrl: loginResult.currentUrl,
-    title: loginResult.title,
-    });
-
-  // Phase 6以降で注文フローを追加する
+  logInfo("注文フローが正常に完了しました", {
+    status: orderResult.status,
+    targetDate: orderResult.targetDate,
+    menuName: orderResult.menuName,
+    price: orderResult.price,
+    screenshotPath: orderResult.screenshotPath,
+  });
 }
 
 main().catch((error) => {
-  logError("Unhandled error", {
+  logError("予期しないエラーが発生しました", {
     error: error instanceof Error ? error.message : String(error),
   });
 
